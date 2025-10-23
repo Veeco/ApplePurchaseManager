@@ -16,6 +16,7 @@ public protocol ApplePurchaseManagerDelegate: AnyObject {
 public struct PurchaseResult {
     public let productIdentifier: String
     public let transactionIdentifier: String
+    public let originalTransactionIdentifier: String?
     public let receiptData: String
     public let userID: String
 }
@@ -250,6 +251,7 @@ extension ApplePurchaseManager: SKPaymentTransactionObserver {
             let result = PurchaseResult(
                 productIdentifier: transaction.payment.productIdentifier,
                 transactionIdentifier: transactionId,
+                originalTransactionIdentifier: transaction.original?.transactionIdentifier,
                 receiptData: receiptData,
                 userID: currentUserID ?? ""
             )
