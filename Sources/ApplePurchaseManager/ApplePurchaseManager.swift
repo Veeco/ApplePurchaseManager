@@ -67,10 +67,15 @@ public class ApplePurchaseManager: NSObject {
     private var delegates = NSHashTable<AnyObject>.weakObjects()
     private var currentUserID: String?
     private var pendingTransactions = [String: SKPaymentTransaction]()
+    private let applicationUsernameStoreKey = "ApplePurchaseManagerApplicationUsernameStore"
+    private var applicationUsernameStore = [String: String]()
     
     private override init() {
         super.init()
         SKPaymentQueue.default().add(self)
+        if let store = UserDefaults.standard.dictionary(forKey: applicationUsernameStoreKey) as? [String: String] {
+            applicationUsernameStore = store
+        }
     }
     
     deinit {
@@ -130,6 +135,8 @@ public class ApplePurchaseManager: NSObject {
         
         // 从缓存中移除
         instance.pendingTransactions.removeValue(forKey: transactionIdentifier)
+        instance.applicationUsernameStore.removeValue(forKey: transactionIdentifier)
+        UserDefaults.standard.set(instance.applicationUsernameStore, forKey: instance.applicationUsernameStoreKey)
         
         return nil
     }
@@ -150,6 +157,7 @@ public class ApplePurchaseManager: NSObject {
         if let userID = currentUserID {
             payment.applicationUsername = userID
         }
+        currentUserID = nil
         SKPaymentQueue.default().add(payment)
     }
     
@@ -159,7 +167,6 @@ public class ApplePurchaseManager: NSObject {
     
     private func resetTransactionState() {
         isTransactionInProgress = false
-        currentUserID = nil
     }
     
     // MARK: - Private Delegate Methods
@@ -247,13 +254,26 @@ extension ApplePurchaseManager: SKPaymentTransactionObserver {
                 pendingTransactions[transactionId] = transaction
             }
             
+            var resolvedUserID = ""
+            if let appUsername = transaction.payment.applicationUsername, !appUsername.isEmpty {
+                resolvedUserID = appUsername
+                if !transactionId.isEmpty {
+                    applicationUsernameStore[transactionId] = appUsername
+                    UserDefaults.standard.set(applicationUsernameStore, forKey: applicationUsernameStoreKey)
+                }
+            } else {
+                if !transactionId.isEmpty, let stored = applicationUsernameStore[transactionId] {
+                    resolvedUserID = stored
+                }
+            }
+            
             // 创建购买结果
             let result = PurchaseResult(
                 productIdentifier: transaction.payment.productIdentifier,
                 transactionIdentifier: transactionId,
                 originalTransactionIdentifier: transaction.original?.transactionIdentifier,
                 receiptData: receiptData,
-                userID: currentUserID ?? ""
+                userID: resolvedUserID
             )
             
             notifyDelegatesSuccess(result)
